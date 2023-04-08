@@ -1,11 +1,17 @@
 import socket
 import os
 import time
+import timer
+import udt
+import packet
+
 
 SERVER_HOST = "0.0.0.0"
-BUFFER_SIZE = 1000
-DEFAULT_FILE_PATH = "default_file.txt"
+SERVER_PORT = ""
+BUFFER_SIZE = 999 #Save 1 byte for sequence number
+DEFAULT_FILE_PATH = "default_file.pdf"
 ACK_TIMEOUT = 2  # Timeout for waiting for ACKs, in seconds
+
 
 def send_snw(sender_socket, file_path):
     if os.path.isfile(file_path):
@@ -14,15 +20,20 @@ def send_snw(sender_socket, file_path):
 
         with open(file_path, "rb") as file:
             seq_number = 0
-            bytes_read = file.read(BUFFER_SIZE)
+            bytes_read = file.read(BUFFER_SIZE) 
             while bytes_read:
                 # Add the sequence number to the data segment
-                data = bytes([seq_number]) + bytes_read
+                #data = bytes([seq_number]) + bytes_read
+                #create a packet 
+                dataPacket = packet.make(seq_number, bytes_read)
 
                 # Send the segment and wait for ACK
                 ack_received = False
                 while not ack_received:
-                    sender_socket.send(data)
+                    #sender_socket.send(data)
+                    #send it 
+                    client_address = (SERVER_HOST, SERVER_PORT)
+                    udt.send(dataPacket, sender_socket, client_address)
                     print(f"Sent segment with sequence number {seq_number}")
 
                     # Wait for ACK with a timeout
@@ -50,8 +61,7 @@ def send_snw(sender_socket, file_path):
         print("Default file not found.")
 
 def main():
-    SERVER_PORT = int(input("Enter the port number to listen on: "))
-    protocol = input("Enter the protocol to use (SnW or GBN): ")
+    
 
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server_socket.bind((SERVER_HOST, SERVER_PORT))
@@ -73,4 +83,6 @@ def main():
         client_socket.close()
 
 if __name__ == "__main__":
+    SERVER_PORT = int(input("Enter the port number to listen on: "))
+    protocol = input("Enter the protocol to use (SnW or GBN): ")
     main()
