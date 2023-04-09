@@ -14,6 +14,9 @@ ACK_TIMEOUT = 2  # Timeout for waiting for ACKs, in seconds
 
 
 def send_snw(sender_socket, file_path):
+    PACKETS_TRANSMITTED = 0
+    retransmitted_packets = 0
+    
     if os.path.isfile(file_path):
         file_size = os.path.getsize(file_path)
         sender_socket.send((f"{file_size}|".encode()))
@@ -34,6 +37,7 @@ def send_snw(sender_socket, file_path):
                     #send it 
                     client_address = (SERVER_HOST, SERVER_PORT)
                     udt.send(dataPacket, sender_socket, client_address)
+                    PACKETS_TRANSMITTED += 1
                     print(f"Sent segment with sequence number {seq_number}")
 
                     # Wait for ACK with a timeout
@@ -50,11 +54,13 @@ def send_snw(sender_socket, file_path):
                             print(f"Received incorrect ACK for sequence number {received_seq_number}")
                     except socket.timeout:
                         print(f"ACK timeout for sequence number {seq_number}")
+                        retransmitted_packets += 1
 
                 # Move to the next segment and toggle the sequence number
                 bytes_read = file.read(BUFFER_SIZE)
                 seq_number ^= 1  # Toggle the sequence number between 0 and 1
-
+        print("The total number of packets sent is: " + str(PACKETS_TRANSMITTED))
+        print("The total number of retransmitted packets is: " + str(retransmitted_packets))
         print(f"File {file_path} has been sent.")
     else:
         sender_socket.send(b"0")
