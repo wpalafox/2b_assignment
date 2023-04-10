@@ -5,13 +5,67 @@ import time
 
 import udt
 import packet
-
+import threading
+from collections import deque
+from select import select
 
 SERVER_HOST = "0.0.0.0"
 SERVER_PORT = ""
 BUFFER_SIZE = 999 #Save 1 byte for sequence number
 DEFAULT_FILE_PATH = "default_file.pdf"
 ACK_TIMEOUT = 2  # Timeout for waiting for ACKs, in seconds
+WINDOW_SIZE = 4  # Set the window size here (e.g., 4, 8, 12, 16)
+
+def send_gbn(sender_socket, file_path):
+    def send_packet(packet_data, seq_number, sock, address):
+        dataPacket = packet.make(seq_number, packet_data)
+        udt.send(dataPacket, sock, address)
+
+    def recv_ack(sock, expected_seq_number):
+        try:
+            ack = sock.recv(1)
+            received_seq_number = int.from_bytes(ack, byteorder='little')
+            return received_seq_number == expected_seq_number
+        except socket.timeout:
+            return False
+
+    if os.path.isfile(file_path):
+        file_size = os.path.getsize(file_path)
+        sender_socket.send((f"{file_size}|".encode()))
+
+        with open(file_path, "rb") as file:
+            bytes_read = file.read(BUFFER_SIZE)
+            seq_number = 0
+            window = deque()
+            base = 0
+            next_seq_number = 0
+
+            while bytes_read or window:
+                while len(window) < WINDOW_SIZE and bytes_read:
+                    window.append((seq_number, bytes_read))
+                    send_packet(bytes_read, seq_number, sender_socket, (SERVER_HOST, SERVER_PORT))
+                    print(f"Sent segment with sequence number {seq_number}")
+                    bytes_read = file.read(BUFFER_SIZE)
+                    seq_number = (seq_number + 1) % (2 * WINDOW_SIZE)
+                    next_seq_number = seq_number
+
+                sender_socket.settimeout(ACK_TIMEOUT)
+                ack_received = recv_ack(sender_socket, base % (2 * WINDOW_SIZE))
+
+                if ack_received:
+                    print(f"Received ACK for sequence number {base % (2 * WINDOW_SIZE)}")
+                    base += 1
+                    window.popleft()
+                else:
+                    print(f"ACK timeout for sequence number {base % (2 * WINDOW_SIZE)}")
+                    # Retransmit all packets in the window
+                    for seq_number, packet_data in window:
+                        send_packet(packet_data, seq_number, sender_socket, (SERVER_HOST, SERVER_PORT))
+
+        print(f"File {file_path} has been sent.")
+    else:
+        sender_socket.send(b"0")
+        print("Default file not found.")
 
 
 def send_snw(sender_socket, file_path):
@@ -93,8 +147,11 @@ def main():
         
         if protocol == "SnW":
             send_snw(client_socket, DEFAULT_FILE_PATH)
+        elif protocol == "GBN":
+            send_gbn(client_socket, DEFAULT_FILE_PATH)  
         else:
             print("Protocol not supported.")
+
 
         client_socket.close()
 
