@@ -6,14 +6,14 @@ import time
 import udt
 import packet
 
-
+# Constants and default values
 SERVER_HOST = "0.0.0.0"
 SERVER_PORT = ""
 BUFFER_SIZE = 999 #Save 1 byte for sequence number
 DEFAULT_FILE_PATH = "default_file.pdf"
 ACK_TIMEOUT = 2  # Timeout for waiting for ACKs, in seconds
 
-
+# Function to send a file using the Stop-and-Wait protocol
 def send_snw(sender_socket, file_path):
     my_timer = Timer(duration=1000)
     # Start the timer
@@ -24,14 +24,16 @@ def send_snw(sender_socket, file_path):
     if os.path.isfile(file_path):
         file_size = os.path.getsize(file_path)
         sender_socket.send((f"{file_size}|".encode()))
-
+         # Check if the file exists and send its size, otherwise send 0
         with open(file_path, "rb") as file:
             seq_number = 0
             bytes_read = file.read(BUFFER_SIZE) 
+            
+            #Open the file for reading and start sending segments
             while bytes_read:
                 # Add the sequence number to the data segment
                 #data = bytes([seq_number]) + bytes_read
-                #create a packet 
+                # Create a packet with the sequence number and data
                 dataPacket = packet.make(seq_number, bytes_read)
 
                 # Send the segment and wait for ACK
@@ -78,7 +80,7 @@ def send_snw(sender_socket, file_path):
 
 def main():
     
-
+     # Create a TCP server socket, bind it, and listen for incoming connections
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server_socket.bind((SERVER_HOST, SERVER_PORT))
     server_socket.listen(1)
@@ -90,7 +92,7 @@ def main():
         # Wait for the handshake message from the client
         handshake_msg = client_socket.recv(BUFFER_SIZE).decode()
         
-        
+        # Check the requested protocol and call the appropriate function
         if protocol == "SnW":
             send_snw(client_socket, DEFAULT_FILE_PATH)
         else:
